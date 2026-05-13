@@ -1,0 +1,507 @@
+#include <iostream>
+#include <vector>
+#include <queue>
+#include <memory>
+#include <string>
+#include <cstdlib>
+#include <ctime>
+
+
+1.Product
+
+class Product {
+private:
+    int m_id;
+
+public:
+    Product(int id) : m_id(id) {}
+    virtual ~Product() {}
+
+    int getId() const {
+        return m_id;
+    }
+
+    virtual std::string getName() const = 0;
+};
+
+class WaferProduct : public Product {
+public:
+    WaferProduct(int id) : Product(id) {}
+
+    std::string getName() const override {
+        return "Silicon Wafer";
+    }
+};
+
+class RamProduct : public Product {
+public:
+    RamProduct(int id) : Product(id) {}
+
+    std::string getName() const override {
+        return "RAM";
+    }
+};
+
+class FinishedProduct : public Product {
+public:
+    FinishedProduct(int id) : Product(id) {}
+
+    std::string getName() const override {
+        return "Packaged RAM";
+    }
+};
+
+2. Command / Snapshot
+
+enum class MachineStatus {
+    Idle,
+    Working,
+    Broken
+};
+
+enum class ScenarioType {
+    NormalFlow,
+    RandomBreakdown
+};
+
+struct MachineCmd {
+    bool forceBreak = false;
+    bool instantRepair = false;
+};
+
+struct MachineSnap {
+    std::string name;
+    std::string status;
+    int health = 100;
+    int queueSize = 0;
+    int outputCount = 0;
+    int processTime = 0;
+    int progress = 0;
+};
+
+3. EventLog
+
+class EventLog {
+private:
+    std::vector<std::string> m_logs;
+
+public:
+    void add(int tick, const std::string& msg) {
+        m_logs.push_back("[Tick " + std::to_string(tick) + "] " + msg);
+    }
+
+    void printRecent() const {
+        std::cout << "\n===== Event Log =====\n";
+        int start = 0;
+
+        if (m_logs.size() > 10) {
+            start = static_cast<int>(m_logs.size()) - 10;
+        }
+
+        for (int i = start; i < static_cast<int>(m_logs.size()); ++i) {
+            std::cout << m_logs[i] << "\n";
+        }
+    }
+
+    void clear() {
+        m_logs.clear();
+    }
+};
+
+4. SimulationObject
+
+class SimulationObject {
+private:
+    std::string m_name;
+
+public:
+    SimulationObject(const std::string& name) : m_name(name) {}
+    virtual ~SimulationObject() {}
+
+    std::string getName() const {
+        return m_name;
+    }
+
+    virtual void update(int tick, EventLog& log) = 0;
+    virtual std::string getInfo() const = 0;
+};
+
+5. Machine
+
+class Machine : public SimulationObject {
+private:
+    int m_processTime;
+    int m_progress;
+    int m_health;
+    int m_breakdownProbability;
+    int m_queueCapacity;
+    int m_outputCount;
+
+    MachineStatus m_status;
+    Machine* m_nextMachine;
+
+protected:
+    std::queue<std::unique_ptr<Product>> m_inputQueue;
+
+public:
+    Machine(
+        const std::string& name,
+        int processTime,
+        int queueCapacity,
+        int breakdownProbability
+    )
+        : SimulationObject(name),
+          m_processTime(processTime),
+          m_progress(0),
+          m_health(100),
+          m_breakdownProbability(breakdownProbability),
+          m_queueCapacity(queueCapacity),
+          m_outputCount(0),
+          m_status(MachineStatus::Idle),
+          m_nextMachine(nullptr) {}
+
+    virtual ~Machine() {}
+
+    void setNextMachine(Machine* next) {
+        m_nextMachine = next;
+    }
+
+    bool canReceive() const {
+        return static_cast<int>(m_inputQueue.size()) < m_queueCapacity;
+    }
+
+    bool receiveProduct(std::unique_ptr<Product> product) {
+        if (!canReceive()) {
+            return false;
+        }
+
+        m_inputQueue.push(std::move(product));
+        return true;
+    }
+
+    void applyCmd(const MachineCmd& cmd, int tick, EventLog& log) {
+        if (cmd.forceBreak) {
+            m_status = MachineStatus::Broken;
+            m_health = 0;
+            log.add(tick, getName() + " was forced to break.");
+        }
+
+        if (cmd.instantRepair) {
+            m_status = MachineStatus::Idle;
+            m_health = 100;
+            m_progress = 0;
+            log.add(tick, getName() + " was repaired instantly.");
+        }
+    }
+
+    void update(int tick, EventLog& log) override {
+        if (m_status == MachineStatus::Broken) {
+            return;
+        }
+
+        tryRandomBreakdown(tick, log);
+
+        if (m_status == MachineStatus::Broken) {
+            return;
+        }
+
+        if (m_inputQueue.empty()) {
+            m_status = MachineStatus::Idle;
+            m_progress = 0;
+            return;
+        }
+
+        m_status = MachineStatus::Working;
+        m_progress++;
+
+        if (m_progress >= m_processTime) {
+            std::unique_ptr<Product> input = std::move(m_inputQueue.front());
+            m_inputQueue.pop();
+
+            std::unique_ptr<Product> output = processProduct(std::move(input));
+            m_progress = 0;
+            m_outputCount++;
+
+            if (m_nextMachine != nullptr) {
+                bool success = m_nextMachine->receiveProduct(std::move(output));
+
+                if (!success) {
+                    log.add(tick, getName() + " output lost because next queue is full.");
+                }
+            }
+            else {
+                log.add(tick, getName() + " finished final product.");
+            }
+        }
+    }
+
+    std::string getInfo() const override {
+        return getName() + " | " + statusToString() +
+            " | Health: " + std::to_string(m_health) +
+            " | Queue: " + std::to_string(m_inputQueue.size()) +
+            " | Output: " + std::to_string(m_outputCount);
+    }
+
+    MachineSnap snapshot() const {
+        MachineSnap snap;
+        snap.name = getName();
+        snap.status = statusToString();
+        snap.health = m_health;
+        snap.queueSize = static_cast<int>(m_inputQueue.size());
+        snap.outputCount = m_outputCount;
+        snap.processTime = m_processTime;
+        snap.progress = m_progress;
+        return snap;
+    }
+
+    void setBreakdownProbability(int probability) {
+        m_breakdownProbability = probability;
+    }
+
+    int getOutputCount() const {
+        return m_outputCount;
+    }
+
+protected:
+    virtual std::unique_ptr<Product> processProduct(std::unique_ptr<Product> input) = 0;
+
+private:
+    void tryRandomBreakdown(int tick, EventLog& log) {
+        if (m_breakdownProbability <= 0) {
+            return;
+        }
+
+        int r = rand() % 100;
+
+        if (r < m_breakdownProbability) {
+            m_status = MachineStatus::Broken;
+            m_health = 0;
+            log.add(tick, getName() + " broke down randomly.");
+        }
+    }
+
+    std::string statusToString() const {
+        if (m_status == MachineStatus::Idle) {
+            return "Idle";
+        }
+        if (m_status == MachineStatus::Working) {
+            return "Working";
+        }
+        return "Broken";
+    }
+};
+
+6. Concrete Machines
+
+class WaferMachine : public Machine {
+private:
+    int m_nextProductId;
+
+public:
+    WaferMachine()
+        : Machine("Wafer Machine", 3, 10, 1),
+          m_nextProductId(1) {}
+
+protected:
+    std::unique_ptr<Product> processProduct(std::unique_ptr<Product> input) override {
+        return std::make_unique<WaferProduct>(m_nextProductId++);
+    }
+};
+
+class RamMachine : public Machine {
+public:
+    RamMachine()
+        : Machine("RAM Machine", 5, 10, 2) {}
+
+protected:
+    std::unique_ptr<Product> processProduct(std::unique_ptr<Product> input) override {
+        return std::make_unique<RamProduct>(input->getId());
+    }
+};
+
+class PackingMachine : public Machine {
+public:
+    PackingMachine()
+        : Machine("Packing Machine", 4, 10, 1) {}
+
+protected:
+    std::unique_ptr<Product> processProduct(std::unique_ptr<Product> input) override {
+        return std::make_unique<FinishedProduct>(input->getId());
+    }
+};
+
+7. Factory
+
+class Factory {
+private:
+    int m_tick;
+    int m_speed;
+    bool m_running;
+    ScenarioType m_scenario;
+    EventLog m_log;
+
+    std::vector<std::unique_ptr<Machine>> m_machines;
+
+public:
+    Factory()
+        : m_tick(0),
+          m_speed(1),
+          m_running(false),
+          m_scenario(ScenarioType::NormalFlow) {
+        reset();
+    }
+
+    void reset() {
+        m_tick = 0;
+        m_running = false;
+        m_log.clear();
+        m_machines.clear();
+
+        auto wafer = std::make_unique<WaferMachine>();
+        auto ram = std::make_unique<RamMachine>();
+        auto packing = std::make_unique<PackingMachine>();
+
+        wafer->setNextMachine(ram.get());
+        ram->setNextMachine(packing.get());
+
+        m_machines.push_back(std::move(wafer));
+        m_machines.push_back(std::move(ram));
+        m_machines.push_back(std::move(packing));
+
+        m_log.add(m_tick, "Factory was reset.");
+    }
+
+    void start() {
+        m_running = true;
+        m_log.add(m_tick, "Factory started.");
+    }
+
+    void pause() {
+        m_running = false;
+        m_log.add(m_tick, "Factory paused.");
+    }
+
+    void setSpeed(int speed) {
+        if (speed < 1) {
+            speed = 1;
+        }
+        if (speed > 5) {
+            speed = 5;
+        }
+        m_speed = speed;
+    }
+
+    void setScenario(ScenarioType scenario) {
+        m_scenario = scenario;
+
+        if (m_scenario == ScenarioType::NormalFlow) {
+            for (auto& machine : m_machines) {
+                machine->setBreakdownProbability(1);
+            }
+            m_log.add(m_tick, "Scenario changed to Normal Flow.");
+        }
+        else if (m_scenario == ScenarioType::RandomBreakdown) {
+            for (auto& machine : m_machines) {
+                machine->setBreakdownProbability(6);
+            }
+            m_log.add(m_tick, "Scenario changed to Random Breakdown.");
+        }
+    }
+
+    void update() {
+        if (!m_running) {
+            return;
+        }
+
+        for (int i = 0; i < m_speed; ++i) {
+            m_tick++;
+
+            // Raw material input: every 2 ticks, WaferMachine receives dummy input.
+            if (m_tick % 2 == 0) {
+                std::unique_ptr<Product> raw = std::make_unique<WaferProduct>(0);
+                bool success = m_machines[0]->receiveProduct(std::move(raw));
+
+                if (!success) {
+                    m_log.add(m_tick, "Raw material lost because Wafer Machine queue is full.");
+                }
+            }
+
+            for (auto& machine : m_machines) {
+                machine->update(m_tick, m_log);
+            }
+        }
+    }
+
+    void applyMachineCmd(int index, const MachineCmd& cmd) {
+        if (index < 0 || index >= static_cast<int>(m_machines.size())) {
+            return;
+        }
+
+        m_machines[index]->applyCmd(cmd, m_tick, m_log);
+    }
+
+    std::vector<MachineSnap> getMachineSnapshots() const {
+        std::vector<MachineSnap> snaps;
+
+        for (const auto& machine : m_machines) {
+            snaps.push_back(machine->snapshot());
+        }
+
+        return snaps;
+    }
+
+    int getTick() const {
+        return m_tick;
+    }
+
+    int getFinishedGoods() const {
+        if (m_machines.empty()) {
+            return 0;
+        }
+
+        return m_machines.back()->getOutputCount();
+    }
+
+    void printStatus() const {
+        std::cout << "\n===== Factory Status =====\n";
+        std::cout << "Tick: " << m_tick << "\n";
+        std::cout << "Finished Goods: " << getFinishedGoods() << "\n";
+
+        for (const auto& machine : m_machines) {
+            std::cout << machine->getInfo() << "\n";
+        }
+
+        m_log.printRecent();
+    }
+};
+
+8. Main
+
+int main() {
+    srand(static_cast<unsigned int>(time(nullptr)));
+
+    Factory factory;
+    factory.setScenario(ScenarioType::NormalFlow);
+    factory.setSpeed(1);
+    factory.start();
+
+    for (int i = 0; i < 40; ++i) {
+        factory.update();
+
+        if (i == 15) {
+            MachineCmd cmd;
+            cmd.forceBreak = true;
+            factory.applyMachineCmd(1, cmd); // RAM Machine 강제 고장
+        }
+
+        if (i == 25) {
+            MachineCmd cmd;
+            cmd.instantRepair = true;
+            factory.applyMachineCmd(1, cmd); // RAM Machine 수리
+        }
+
+        factory.printStatus();
+    }
+
+    return 0;
+}
