@@ -4,6 +4,7 @@
 #include "Products.h"
 #include <queue>
 #include <memory>
+#include <string>
 
 class Conveyor : public SimulationObject {
 private:
