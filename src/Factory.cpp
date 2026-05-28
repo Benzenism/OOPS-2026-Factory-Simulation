@@ -132,10 +132,20 @@ FactorySnapshot Factory::getSnapshot() const {
     snap.wipCount = 0;
 
     for (const auto& obj : simObjects) {
+        
         if (auto m = std::dynamic_pointer_cast<Machine>(obj)) {
+            
             snap.machines.push_back(m->getSnapshot());
+
             snap.wipCount += m->getQueueSize();
-            if (m->getState() == MachineState::WORKING) snap.wipCount++;
+
+            if (m->getState() == MachineState::WORKING)
+                snap.wipCount++;
+        }
+
+        else if (auto c = std::dynamic_pointer_cast<Conveyor>(obj)) {
+            
+            snap.machines.push_back(c->getSnapshot());
         }
     }
     return snap;
