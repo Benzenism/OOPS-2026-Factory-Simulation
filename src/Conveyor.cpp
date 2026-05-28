@@ -27,3 +27,25 @@ void Conveyor::update(int tick) {
 std::string Conveyor::getInfo() const {
     return id;
 }
+
+MachineSnapshot Conveyor::getSnapshot() const {
+    MachineSnapshot snap;
+
+    snap.id = id;
+    snap.type = "Conveyor";
+
+    snap.state = MachineState::WORKING;
+
+    snap.progress = (float)items.size();
+    snap.processTime = delay;
+
+    snap.health = 100;
+    snap.maxHealth = 100;
+
+    snap.queueSize = (int)items.size();
+    snap.capacity = 999;
+
+    snap.outputCount = 0;
+
+    return snap;
+}
