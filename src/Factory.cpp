@@ -49,7 +49,11 @@ void Factory::init() {
     tester->setCallbacks(logger, onFinish, onLost);
 
     simObjects.push_back(cutter);
+    simObjects.push_back(conveyor1);
+
     simObjects.push_back(assembler);
+    simObjects.push_back(conveyor2);
+
     simObjects.push_back(tester);
 
     for (auto& obj : simObjects) {
