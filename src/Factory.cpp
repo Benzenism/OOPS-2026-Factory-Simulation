@@ -1,5 +1,6 @@
 #include "Factory.h"
 #include "RamMachines.h"
+#include "Conveyor.h"
 
 Factory::Factory() {
     init();
@@ -34,8 +35,14 @@ void Factory::init() {
         logger("Finished product: " + p->getId(), false);
     };
 
-    cutter->setNextNode(assembler);
-    assembler->setNextNode(tester);
+    auto conveyor1 = std::make_shared<Conveyor>("Conveyor A", 2);
+    auto conveyor2 = std::make_shared<Conveyor>("Conveyor B", 2);
+
+    cutter->setNextNode(conveyor1);
+    conveyor1->setNextNode(assembler);
+
+    assembler->setNextNode(conveyor2);
+    conveyor2->setNextNode(tester);
     
     cutter->setCallbacks(logger, nullptr, onLost);
     assembler->setCallbacks(logger, nullptr, onLost);
