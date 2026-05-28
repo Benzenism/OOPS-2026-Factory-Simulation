@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SimulationObject.h"
+#include "SimulationTypes.h"
 #include "Products.h"
 #include <queue>
 #include <memory>
@@ -27,4 +28,6 @@ public:
     void update(int tick) override;
 
     std::string getInfo() const override;
+
+    MachineSnapshot getSnapshot() const;
 };
