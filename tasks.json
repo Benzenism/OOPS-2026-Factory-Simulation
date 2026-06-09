@@ -1,0 +1,44 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build ImGui Project",
+      "type": "process",
+      "command": "C:/msys64/ucrt64/bin/g++.exe",
+      "args": [
+        "-std=c++17",
+        "src/*.cpp", 
+        "libs/imgui-master/imgui.cpp",
+        "libs/imgui-master/imgui_draw.cpp",
+        "libs/imgui-master/imgui_tables.cpp",
+        "libs/imgui-master/imgui_widgets.cpp",
+        "libs/imgui-master/backends/imgui_impl_sdl2.cpp",
+        "libs/imgui-master/backends/imgui_impl_opengl3.cpp",
+        "-Ilibs/imgui-master",
+        "-Ilibs/imgui-master/backends",
+        "-IC:/msys64/ucrt64/include/SDL2",
+        "-LC:/msys64/ucrt64/lib",
+        "-lmingw32",
+        "-lSDL2main",
+        "-lSDL2",
+        "-lopengl32",
+        "-mwindows",
+        "-o",
+        "build/app.exe"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PATH": "C:/msys64/ucrt64/bin;${env:PATH}"
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
+    }
+  ]
+}
