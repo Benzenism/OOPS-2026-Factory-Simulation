@@ -2,13 +2,13 @@
 #include <string>
 
 class Product {
-protected:
+private:
     std::string id;
 public:
     explicit Product(std::string id);
     virtual ~Product() = default;
 
-    virtual std::string getId() const;
+    std::string getId() const;
     virtual std::string getType() const = 0;
 };
 

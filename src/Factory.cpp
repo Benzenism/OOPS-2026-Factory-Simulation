@@ -1,81 +1,87 @@
 #include "Factory.h"
+#include "Machine.h"
 #include "RamMachines.h"
 #include "Conveyor.h"
+#include "Products.h"
+#include <stdexcept>
 
 Factory::Factory() {
     init();
 }
 
 void Factory::logEvent(const std::string& msg, bool isError) {
-    std::string prefix = isError ? "[WARN] " : "[INFO] ";
+    std::string prefix  = isError ? "[WARN] " : "[INFO] ";
     std::string logLine = "[" + std::to_string(currentTick) + "] " + prefix + msg;
     eventLogs.push_back(logLine);
-    if (eventLogs.size() > 80) eventLogs.erase(eventLogs.begin());
+    if (eventLogs.size() > 80)
+        eventLogs.erase(eventLogs.begin());
 }
 
 void Factory::init() {
-    currentTick = 0;
-    isRunning = false;
+    currentTick     = 0;
+    isRunning       = false;
     currentScenario = Scenario::Normal;
     statsFinished = statsBreaks = statsLost = 0;
     rawTimer = 0;
-    nextPid = 1;
-    
+    nextPid  = 1;
+
     eventLogs.clear();
     simObjects.clear();
 
-    auto cutter = std::make_shared<WaferCutter>();
-    auto assembler = std::make_shared<ChipAssembler>();
-    auto tester = std::make_shared<ModuleTester>();
-
-    auto logger = [this](const std::string& m, bool e) { logEvent(m, e); };
-    auto onLost = [this]() { statsLost++; };
+    auto logger   = [this](const std::string& m, bool e) { logEvent(m, e); };
+    auto onLost   = [this]() { statsLost++; };
     auto onFinish = [this, logger](std::shared_ptr<Product> p) {
         statsFinished++;
         logger("Finished product: " + p->getId(), false);
     };
 
-    auto conveyor1 = std::make_shared<Conveyor>("Conveyor A", 2);
-    auto conveyor2 = std::make_shared<Conveyor>("Conveyor B", 2);
+    auto convA = std::make_shared<Conveyor>("Conveyor A", 2, 5);
+    auto convB = std::make_shared<Conveyor>("Conveyor B", 2, 5);
+    auto convC = std::make_shared<Conveyor>("Conveyor C", 2, 5);
 
-    cutter->setNextNode(conveyor1);
-    conveyor1->setNextNode(assembler);
+    auto cutter    = std::make_shared<WaferCutter>();
+    auto assembler = std::make_shared<ChipAssembler>();
+    auto tester    = std::make_shared<ModuleTester>();
 
-    assembler->setNextNode(conveyor2);
-    conveyor2->setNextNode(tester);
-    
+    convA->setCallbacks(logger, onLost);
+    convB->setCallbacks(logger, onLost);
+    convC->setCallbacks(logger, onLost);
+
+    cutter->setInputConveyor(convA);
+    cutter->setOutputConveyor(convB);
     cutter->setCallbacks(logger, nullptr, onLost);
+
+    assembler->setInputConveyor(convB);
+    assembler->setOutputConveyor(convC);
     assembler->setCallbacks(logger, nullptr, onLost);
+
+    tester->setInputConveyor(convC);
+    tester->setOutputConveyor(nullptr);
     tester->setCallbacks(logger, onFinish, onLost);
 
+    simObjects.push_back(convA);
     simObjects.push_back(cutter);
-    simObjects.push_back(conveyor1);
-
+    simObjects.push_back(convB);
     simObjects.push_back(assembler);
-    simObjects.push_back(conveyor2);
-
+    simObjects.push_back(convC);
     simObjects.push_back(tester);
 
     for (auto& obj : simObjects) {
-        if (auto m = std::dynamic_pointer_cast<Machine>(obj)) {
-            m->applyScenario(currentScenario);
-        }
+        obj->applyScenario(currentScenario);
     }
 }
 
 void Factory::applyCommand(SimulationCommand& cmd) {
     if (cmd.startWork) isRunning = true;
     if (cmd.pauseWork) isRunning = false;
-    if (cmd.resetWork) init();
-    if (cmd.clearLog) eventLogs.clear();
+    if (cmd.resetWork) { init(); return; }
+    if (cmd.clearLog)  eventLogs.clear();
 
     if (cmd.selectedScenario != currentScenario) {
         currentScenario = cmd.selectedScenario;
         logEvent("Scenario changed.", false);
         for (auto& obj : simObjects) {
-            if (auto m = std::dynamic_pointer_cast<Machine>(obj)) {
-                m->applyScenario(currentScenario);
-            }
+            obj->applyScenario(currentScenario);
         }
     }
 
@@ -106,10 +112,7 @@ void Factory::tick() {
     currentTick++;
 
     rawTimer++;
-    int injectInterval = 6; 
-    if (currentScenario == Scenario::Overflow) {
-        injectInterval = 2;
-    }
+    int injectInterval = (currentScenario == Scenario::Overflow) ? 2 : 6;
 
     if (rawTimer >= injectInterval) {
         rawTimer = 0;
@@ -124,29 +127,26 @@ void Factory::tick() {
 
 FactorySnapshot Factory::getSnapshot() const {
     FactorySnapshot snap;
-    snap.currentTick = currentTick;
-    snap.finishedGoods = statsFinished;
+    snap.currentTick     = currentTick;
+    snap.finishedGoods   = statsFinished;
     snap.totalBreakdowns = statsBreaks;
-    snap.lostProducts = statsLost;
-    snap.eventLogs = eventLogs;
-    snap.wipCount = 0;
+    snap.lostProducts    = statsLost;
+    snap.eventLogs       = eventLogs;
+    snap.wipCount        = 0;
 
     for (const auto& obj : simObjects) {
-        
-        if (auto m = std::dynamic_pointer_cast<Machine>(obj)) {
-            
-            snap.machines.push_back(m->getSnapshot());
+        MachineSnapshot ms = obj->getSnapshot();
+        snap.machines.push_back(ms);
 
-            snap.wipCount += m->getQueueSize();
-
-            if (m->getState() == MachineState::WORKING)
-                snap.wipCount++;
-        }
-
-        else if (auto c = std::dynamic_pointer_cast<Conveyor>(obj)) {
-            
-            snap.machines.push_back(c->getSnapshot());
+        if (ms.isConveyor) {
+            snap.wipCount += ms.queueSize;
+        } else {
+            if (auto m = std::dynamic_pointer_cast<Machine>(obj)) {
+                if (m->getState() == MachineState::WORKING)
+                    snap.wipCount++;
+            }
         }
     }
+
     return snap;
 }

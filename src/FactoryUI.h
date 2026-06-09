@@ -1,15 +1,16 @@
 #pragma once
 #include "SimulationTypes.h"
+#include "EventLogPanel.h"
 #include <string>
-#include <EventLogPanel.h>
 
 class FactoryUI {
 private:
-    EventLogPanel logPanel;
+    EventLogPanel    logPanel;
     SimulationCommand currentCmd;
-    std::string selectedMachineId = "";
+    std::string       selectedMachineId;
 
 public:
+    FactoryUI();
     void render(const FactorySnapshot& snap);
     SimulationCommand& getCommand();
 };

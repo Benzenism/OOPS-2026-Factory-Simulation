@@ -1,51 +1,77 @@
 #include "Conveyor.h"
+#include <stdexcept>
 
-Conveyor::Conveyor(std::string id, int delay)
-    : id(std::move(id)), delay(delay), currentTick(0) {}
+Conveyor::Conveyor(std::string id, int delay, int capacity)
+    : id(std::move(id)), delay(delay), capacity(capacity), outputCount(0)
+{
+    if (delay <= 0)
+        throw std::invalid_argument("Conveyor delay must be > 0");
+    if (capacity <= 0)
+        throw std::invalid_argument("Conveyor capacity must be > 0");
+}
 
-void Conveyor::setNextNode(std::shared_ptr<SimulationObject> next) {
-    nextNode = next;
+void Conveyor::setCallbacks(EventLogger l, LostCallback lost) {
+    logger = l;
+    onLost = lost;
 }
 
 void Conveyor::pushItem(std::shared_ptr<Product> item) {
-    items.push(item);
+    if (!item) return;
+    if (static_cast<int>(items.size()) >= capacity) {
+        if (logger) logger("Conveyor " + id + " overflow: Product " + item->getId() + " lost.", true);
+        if (onLost)  onLost();
+        return;
+    }
+    items.push_back({item, -1});
 }
 
 void Conveyor::update(int tick) {
-    currentTick++;
-
-    if (!items.empty() && currentTick >= delay) {
-        if (nextNode) {
-            nextNode->pushItem(items.front());
+    for (auto& slot : items) {
+        if (slot.arrivalTick < 0) {
+            slot.arrivalTick = tick;
         }
-
-        items.pop();
-        currentTick = 0;
     }
 }
 
+bool Conveyor::hasReady(int tick) const {
+    if (items.empty()) return false;
+    const auto& front = items.front();
+    return front.arrivalTick >= 0 && (tick - front.arrivalTick) >= delay;
+}
+
+std::shared_ptr<Product> Conveyor::pollReady(int tick) {
+    if (!hasReady(tick)) return nullptr;
+    auto product = items.front().product;
+    items.pop_front();
+    outputCount++;
+    return product;
+}
+
 std::string Conveyor::getInfo() const {
-    return id;
+    return id + " [Conveyor] items=" + std::to_string(items.size())
+           + "/" + std::to_string(capacity);
 }
 
 MachineSnapshot Conveyor::getSnapshot() const {
     MachineSnapshot snap;
-
-    snap.id = id;
-    snap.type = "Conveyor";
-
-    snap.state = MachineState::WORKING;
-
-    snap.progress = (float)items.size();
+    snap.id          = id;
+    snap.type        = "Conveyor";
+    snap.state       = items.empty() ? MachineState::IDLE : MachineState::WORKING;
+    snap.progress    = static_cast<float>(items.size());
     snap.processTime = delay;
-
-    snap.health = 100;
-    snap.maxHealth = 100;
-
-    snap.queueSize = (int)items.size();
-    snap.capacity = 999;
-
-    snap.outputCount = 0;
-
+    snap.health      = 100;
+    snap.maxHealth   = 100;
+    snap.queueSize   = static_cast<int>(items.size());
+    snap.capacity    = capacity;
+    snap.outputCount = outputCount;
+    snap.isConveyor  = true;
     return snap;
+}
+
+void Conveyor::applyScenario(Scenario s) {
+    (void)s;
+}
+
+int Conveyor::getItemCount() const {
+    return static_cast<int>(items.size());
 }

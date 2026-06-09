@@ -1,26 +1,46 @@
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
-
-#include <SDL.h>
-#include <SDL_opengl.h>
+#include <SDL2/SDL.h>
+#include <GL/gl.h>
 #include <chrono>
+#include <stdexcept>
+#include <cstdio>
 
 #include "Factory.h"
 #include "FactoryUI.h"
 
 int main(int argc, char* argv[]) {
-    SDL_Init(SDL_INIT_VIDEO);
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+        std::fprintf(stderr, "SDL_Init Error: %s\n", SDL_GetError());
+        return 1;
+    }
+
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 
-    SDL_Window* window = SDL_CreateWindow("RAM Factory Simulation - OOP Solid",
-                                          SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                          1280, 720, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+    SDL_Window* window = SDL_CreateWindow(
+        "RAM Factory Simulation",
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        1280, 720,
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
+    );
+    if (!window) {
+        std::fprintf(stderr, "SDL_CreateWindow Error: %s\n", SDL_GetError());
+        SDL_Quit();
+        return 1;
+    }
 
     SDL_GLContext gl_context = SDL_GL_CreateContext(window);
+    if (!gl_context) {
+        std::fprintf(stderr, "SDL_GL_CreateContext Error: %s\n", SDL_GetError());
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+
     SDL_GL_MakeCurrent(window, gl_context);
 
     IMGUI_CHECKVERSION();
@@ -28,7 +48,7 @@ int main(int argc, char* argv[]) {
     ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
     ImGui_ImplOpenGL3_Init("#version 130");
 
-    Factory factory;
+    Factory   factory;
     FactoryUI ui;
 
     bool running = true;
@@ -38,12 +58,12 @@ int main(int argc, char* argv[]) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             ImGui_ImplSDL2_ProcessEvent(&event);
-            if (event.type == SDL_QUIT) { running = false; }
+            if (event.type == SDL_QUIT) running = false;
         }
 
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
-        float tickThreshold = 0.8f / ui.getCommand().speedMultiplier; 
+        auto  currentTime  = std::chrono::high_resolution_clock::now();
+        float deltaTime    = std::chrono::duration<float>(currentTime - lastTime).count();
+        float tickThreshold = 0.8f / static_cast<float>(ui.getCommand().speedMultiplier);
 
         if (deltaTime > tickThreshold) {
             factory.tick();
@@ -59,10 +79,13 @@ int main(int argc, char* argv[]) {
 
         SimulationCommand& cmd = ui.getCommand();
         factory.applyCommand(cmd);
-        cmd.clearCommandFlags(); 
+        cmd.clearCommandFlags();
 
         ImGui::Render();
-        glViewport(0, 0, 1280, 720);
+
+        int w, h;
+        SDL_GetWindowSize(window, &w, &h);
+        glViewport(0, 0, w, h);
         glClearColor(0.12f, 0.14f, 0.18f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
