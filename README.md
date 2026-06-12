@@ -2,7 +2,6 @@ This is GIST OOPS Final Project in 2026-1 Semester.
 
 UML:
 '''mermaid
-
 classDiagram
     %% Enumerations and Structs
     class MachineState {
@@ -203,5 +202,4 @@ classDiagram
     FactoryUI ..> FactorySnapshot : uses
     Factory ..> SimulationCommand : uses
     Factory ..> FactorySnapshot : creates
-
 '''
