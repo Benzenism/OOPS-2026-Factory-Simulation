@@ -1,6 +1,8 @@
 This is GIST OOPS Final Project in 2026-1 Semester.
 
 UML:
+
+```mermaid
 classDiagram
 %% Enumerations and Structs
 class MachineState {
@@ -232,3 +234,5 @@ Conveyor_SlottedItem "1" --> "1" Product : carries(product)
 FactoryUI ..> FactorySnapshot : reads
 Factory ..> SimulationCommand : consumes
 Factory ..> FactorySnapshot : generates
+
+```
