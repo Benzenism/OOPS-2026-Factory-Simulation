@@ -261,7 +261,7 @@ Factory ..> FactorySnapshot : generates
 
 The Normal Scenario demonstrates the standard production flow of the RAM manufacturing process. Products move through each stage of the production line without bottlenecks or machine failures, showing the intended behavior of the system.
 
-![Normal Scenario](simulation2.gif)
+![Normal Scenario](simulation1.gif)
 
 ---
 
@@ -269,10 +269,7 @@ The Normal Scenario demonstrates the standard production flow of the RAM manufac
 
 The Overflow Scenario demonstrates how the factory behaves when products are generated faster than they can be processed. Queues begin to fill, bottlenecks appear, and products may be lost due to capacity limitations.
 
-![Overflow Scenario](simulation.gif)
+![Overflow Scenario](simulation2.gif)
 
 ---
 
-## UML Diagram
-
-See `UML-diagram.pdf` for the complete class diagram of the project.
