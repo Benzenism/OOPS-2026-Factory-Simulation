@@ -269,7 +269,7 @@ The Normal Scenario demonstrates the standard production flow of the RAM manufac
 
 The Overflow Scenario demonstrates how the factory behaves when products are generated faster than they can be processed. Queues begin to fill, bottlenecks appear, and products may be lost due to capacity limitations.
 
-![Overflow Scenario](simulation2.gif)
+![Overflow Scenario](./simulation2.gif)
 
 ---
 
