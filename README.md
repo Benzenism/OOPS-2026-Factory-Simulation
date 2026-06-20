@@ -1,6 +1,25 @@
-This is GIST OOPS Final Project in 2026-1 Semester.
+# Factory Simulation
 
-UML:
+GIST OOPS Final Project (2026-1)
+
+## Project Structure
+
+- src/ : source code
+- build/ : executable files
+- UML-diagram.pdf : UML class diagram
+
+## Description
+
+This project simulates a factory production line using object-oriented design principles.
+
+Features:
+- Factory simulation
+- Machine state management
+- Event logging
+- Multiple simulation scenarios
+- Interactive UI
+
+## UML Diagram
 
 ```mermaid
 classDiagram
